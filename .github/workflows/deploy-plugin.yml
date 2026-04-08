@@ -1,0 +1,28 @@
+name: Deploy TRMNL Plugin
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'TRMNLPlugin/**'   # adjust to wherever your .liquid files live
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Install trmnlp
+        run: gem install trmnl_preview
+
+      - name: Push plugin to TRMNL
+        working-directory: ./TRMNLPlugin   # adjust to your plugin folder
+        env:
+          TRMNL_API_KEY: ${{ secrets.TRMNL_API_KEY }}
+        run: trmnlp push

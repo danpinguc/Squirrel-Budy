@@ -1,0 +1,138 @@
+<!--
+  SQUIRREL BUDDY — Quadrant (~400x240)
+  No photo. Condition heading + compact sensor values.
+  Also use for shared layout.
+-->
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;700&display=swap');
+
+  .sb-wrap {
+    font-family: 'IBM Plex Mono', monospace;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 8px 14px 6px;
+    box-sizing: border-box;
+  }
+  .sb-header {
+    text-align: center;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding-bottom: 5px;
+    text-transform: uppercase;
+  }
+  .sb-divider-thick { height: 1.5px; background: #000; width: 100%; }
+  .sb-divider-thin { height: 1px; background: #000; width: 100%; }
+  .sb-divider-light { height: 1px; background: rgba(0,0,0,0.15); width: 100%; }
+
+  .sb-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 0 4px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .sb-condition-heading {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 0;
+  }
+
+  .sb-section-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .sb-sensors {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+  }
+  .sb-val-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 1px 0;
+  }
+  .sb-val-label {
+    font-size: 9px;
+    font-weight: 500;
+    color: rgba(0,0,0,0.5);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    width: 50px;
+    flex-shrink: 0;
+  }
+  .sb-val-qual { flex: 1; }
+  .sb-val-num { text-align: right; flex-shrink: 0; }
+
+  .sb-footer {
+    text-align: center;
+    font-size: 8px;
+    font-weight: 300;
+    padding-top: 4px;
+  }
+</style>
+
+<div class="sb-wrap">
+  <div class="sb-header">Squirrel Buddy</div>
+  <div class="sb-divider-thick"></div>
+
+  <div class="sb-body">
+
+    {% if condition == "active" %}
+      <div class="sb-condition-heading">● Likely Active</div>
+    {% elsif condition == "cautious" %}
+      <div class="sb-condition-heading">● Likely Cautious</div>
+    {% elsif condition == "sheltering" %}
+      <div class="sb-condition-heading">● Likely Sheltering</div>
+    {% else %}
+      <div class="sb-condition-heading">● --</div>
+    {% endif %}
+
+    <div class="sb-divider-thin"></div>
+    <div class="sb-section-label">Sensors</div>
+
+    <div class="sb-sensors">
+      <div class="sb-val-row">
+        <span class="sb-val-label">Temp</span>
+        <span class="sb-val-qual">{{ temp_label | default: "--" }}</span>
+        <span class="sb-val-num">{{ temperature_f | default: "--" }}°F</span>
+      </div>
+      <div class="sb-divider-light"></div>
+      <div class="sb-val-row">
+        <span class="sb-val-label">Light</span>
+        <span class="sb-val-qual">{{ light_label | default: "--" }}</span>
+        <span class="sb-val-num">{{ light_lux | default: "--" }} lx</span>
+      </div>
+      <div class="sb-divider-light"></div>
+      <div class="sb-val-row">
+        <span class="sb-val-label">Sound</span>
+        <span class="sb-val-qual">{{ sound_label | default: "--" }}</span>
+        <span class="sb-val-num">{{ sound_level | default: "--" }} db</span>
+      </div>
+      <div class="sb-divider-light"></div>
+      <div class="sb-val-row">
+        <span class="sb-val-label">Press</span>
+        <span class="sb-val-qual">{{ pressure_label | default: "--" }}</span>
+        <span class="sb-val-num">{{ pressure_hpa | default: "--" }} hPa</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sb-divider-thick"></div>
+  <div class="sb-footer">Updated {{ updated_at | default: "--:--" }}</div>
+</div>

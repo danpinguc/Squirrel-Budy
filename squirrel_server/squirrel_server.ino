@@ -9,7 +9,6 @@
  * Sketch > Include Library > Manage Libraries…
  *   1. "Adafruit BME280"       → install (pulls in Adafruit Unified Sensor)
  *   2. "BH1750"                → by Christopher Laws
- *   3. "arduinoFFT"            → by Enrique Condes (for wind-frequency analysis)
  *
  * No extra networking libraries needed — uses the built-in WebServer.
  *
@@ -26,7 +25,6 @@
 #include <BH1750.h>
 #include <driver/i2s.h>
 #include <WebServer.h>
-#include <arduinoFFT.h>
 
 // ============================================================
 // WiFi credentials — REPLACE THESE with your network details
@@ -44,19 +42,13 @@ const char* password = "Colurado0330";
 // ---- I2S / Audio Config ----
 #define I2S_PORT        I2S_NUM_0
 #define SAMPLE_RATE     16000
-#define BLOCK_SIZE      1024      // must be power of 2 for FFT
+#define BLOCK_SIZE      1024
 #define DISCARD_MS      300
-#define WIND_FREQ_LIMIT 200.0     // Hz — energy below this counts as "wind"
 
 // ---- Sensor Objects ----
 Adafruit_BME280 bme;
 BH1750 lightMeter;
 WebServer server(80);
-
-// ---- FFT Buffers (double precision required by arduinoFFT) ----
-double vReal[BLOCK_SIZE];
-double vImag[BLOCK_SIZE];
-ArduinoFFT<double> FFT(vReal, vImag, BLOCK_SIZE, SAMPLE_RATE);
 
 // ---- Cached Sensor Readings ----
 // These get refreshed every 10 seconds; web requests read them instantly.
@@ -66,7 +58,6 @@ struct SensorData {
   float pressure_hpa   = 0;
   float light_lux      = 0;
   int32_t sound_level  = 0;
-  int32_t wind_proxy   = 0;
   unsigned long timestamp_ms = 0;
 } latest;
 
@@ -189,17 +180,16 @@ void setupI2S() {
 }
 
 // ============================================================
-// Read INMP441 — computes overall amplitude AND low-freq wind proxy
+// Read INMP441 — computes overall amplitude
 // ============================================================
-void readMic(int32_t &amplitude, int32_t &windProxy) {
+void readMic(int32_t &amplitude) {
   int32_t raw[BLOCK_SIZE];
   size_t bytesRead = 0;
 
   esp_err_t err = i2s_read(I2S_PORT, raw, sizeof(raw), &bytesRead,
                            1000 / portTICK_PERIOD_MS);
   if (err != ESP_OK || bytesRead == 0) {
-    amplitude  = -1;
-    windProxy = -1;
+    amplitude = -1;
     return;
   }
 
@@ -210,36 +200,8 @@ void readMic(int32_t &amplitude, int32_t &windProxy) {
   for (int i = 0; i < n; i++) {
     int32_t sample = raw[i] >> 8;   // 24-bit signed
     sum += abs(sample);
-    vReal[i] = (double)sample;      // copy into FFT input buffer
-    vImag[i] = 0;
-  }
-  // Zero-pad if we got fewer samples than BLOCK_SIZE
-  for (int i = n; i < BLOCK_SIZE; i++) {
-    vReal[i] = 0;
-    vImag[i] = 0;
   }
   amplitude = (int32_t)(sum / n);
-
-  // --- FFT-based wind proxy ---
-  // Wind produces broad low-frequency energy (typically < 200 Hz).
-  // We run a real FFT on the sample block, then sum the magnitude of
-  // bins whose center frequency falls below WIND_FREQ_LIMIT.
-  FFT.windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);
-  FFT.compute(FFT_FORWARD);
-  FFT.complexToMagnitude();
-
-  // Each FFT bin covers (SAMPLE_RATE / BLOCK_SIZE) Hz.
-  double binWidth = (double)SAMPLE_RATE / BLOCK_SIZE;
-  int maxBin = (int)(WIND_FREQ_LIMIT / binWidth);
-  if (maxBin > BLOCK_SIZE / 2) maxBin = BLOCK_SIZE / 2;
-
-  double lowEnergy = 0;
-  // Skip bin 0 (DC offset) — start at bin 1
-  for (int i = 1; i <= maxBin; i++) {
-    lowEnergy += vReal[i];  // magnitudes are stored back in vReal
-  }
-
-  windProxy = (int32_t)(lowEnergy / maxBin);  // average magnitude per low bin
 }
 
 // ============================================================
@@ -257,7 +219,7 @@ void refreshSensors() {
   }
 
   if (i2sOk) {
-    readMic(latest.sound_level, latest.wind_proxy);
+    readMic(latest.sound_level);
   }
 
   latest.timestamp_ms = millis();
@@ -273,7 +235,6 @@ void printReadings() {
   Serial.printf("  Pressure:   %.1f hPa\n", latest.pressure_hpa);
   Serial.printf("  Light:      %.1f lux\n", latest.light_lux);
   Serial.printf("  Sound:      %d\n",       latest.sound_level);
-  Serial.printf("  Wind proxy: %d\n",       latest.wind_proxy);
   Serial.printf("  Uptime:     %lu ms\n",   latest.timestamp_ms);
   Serial.println("-------------------------\n");
 }
@@ -289,7 +250,6 @@ String buildJSON() {
   json += ",\"pressure_hpa\":" + String(latest.pressure_hpa, 1);
   json += ",\"light_lux\":"     + String(latest.light_lux, 1);
   json += ",\"sound_level\":"   + String(latest.sound_level);
-  json += ",\"wind_proxy\":"    + String(latest.wind_proxy);
   json += ",\"timestamp_ms\":"  + String(latest.timestamp_ms);
   json += "}";
   return json;
@@ -352,7 +312,6 @@ String buildHTML() {
   <div class="row"><span class="label">Pressure</span><span class="val" id="pres">--</span></div>
   <div class="row"><span class="label">Light</span><span class="val" id="lux">--</span></div>
   <div class="row"><span class="label">Sound level</span><span class="val" id="snd">--</span></div>
-  <div class="row"><span class="label">Wind proxy</span><span class="val" id="wind">--</span></div>
   <div class="row"><span class="label">Uptime</span><span class="val" id="up">--</span></div>
 
   <div class="status" id="status">connecting...</div>
@@ -370,7 +329,6 @@ async function refresh() {
     document.getElementById('pres').textContent = d.pressure_hpa.toFixed(1) + ' hPa';
     document.getElementById('lux').textContent  = d.light_lux.toFixed(1) + ' lux';
     document.getElementById('snd').textContent  = d.sound_level;
-    document.getElementById('wind').textContent = d.wind_proxy;
     document.getElementById('up').textContent   = Math.floor(d.timestamp_ms / 1000) + ' s';
     const s = document.getElementById('status');
     s.textContent = 'live \u2014 updated ' + new Date().toLocaleTimeString();

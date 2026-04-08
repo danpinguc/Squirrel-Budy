@@ -1,0 +1,288 @@
+<!--
+  SQUIRREL BUDDY — TRMNL Private Plugin Markup
+  
+  Paste this into: Plugins > Your Private Plugin > Edit Markup
+  
+  Expected webhook merge_variables from ESP32:
+  {
+    "temperature_f": 76,
+    "humidity_pct": 55,
+    "pressure_hpa": 1013,
+    "light_lux": 342,
+    "sound_level": 27,
+    "condition": "active",
+    "temp_label": "Warm",
+    "light_label": "High",
+    "sound_label": "Quiet",
+    "pressure_label": "Stable",
+    "temp_desc": "Warm enough for foraging",
+    "light_desc": "Good visibility, bright",
+    "sound_desc": "Calm, no disturbances nearby",
+    "pressure_desc": "Stable, no storm approaching",
+    "updated_at": "8:45am"
+  }
+-->
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;700&display=swap');
+
+  .sb-wrap {
+    font-family: 'IBM Plex Mono', monospace;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 16px 24px 12px;
+    box-sizing: border-box;
+  }
+
+  .sb-header {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    padding-bottom: 12px;
+    text-transform: uppercase;
+  }
+
+  .sb-divider-thick {
+    height: 1.5px;
+    background: #000;
+    width: 100%;
+  }
+  .sb-divider-thin {
+    height: 1px;
+    background: #000;
+    width: 100%;
+  }
+  .sb-divider-light {
+    height: 1px;
+    background: rgba(0,0,0,0.2);
+    width: 100%;
+  }
+
+  .sb-body {
+    display: flex;
+    flex: 1;
+    gap: 24px;
+    padding-top: 12px;
+    padding-bottom: 8px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Left column */
+  .sb-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .sb-photo {
+    width: 100%;
+    max-width: 251px;
+    height: 170px;
+    border-radius: 18px;
+    object-fit: cover;
+  }
+  .sb-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  /* Condition heading */
+  .sb-condition-heading {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 0;
+  }
+
+  /* Breakdown rows */
+  .sb-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sb-breakdown-row {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 10px;
+    line-height: 1.4;
+  }
+  .sb-breakdown-label {
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    width: 65px;
+  }
+  .sb-breakdown-desc {
+    font-weight: 300;
+  }
+
+  /* Column separator */
+  .sb-col-sep {
+    width: 1.5px;
+    background: #000;
+    align-self: stretch;
+    flex-shrink: 0;
+  }
+
+  /* Right column */
+  .sb-right {
+    width: 260px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 0;
+    overflow: hidden;
+  }
+
+  /* Sensor rows */
+  .sb-sensor {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 2px 0;
+    overflow: hidden;
+  }
+  .sb-sensor-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(0,0,0,0.6);
+  }
+  .sb-sensor-data {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  /* Footer */
+  .sb-footer {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 300;
+    padding-top: 8px;
+  }
+</style>
+
+<div class="sb-wrap">
+
+  <!-- Header -->
+  <div class="sb-header">Squirrel Buddy</div>
+  <div class="sb-divider-thick"></div>
+
+  <!-- Body -->
+  <div class="sb-body">
+
+    <!-- Left Column: Translation -->
+    <div class="sb-left">
+
+      <!-- Squirrel Photo -->
+      <div style="padding: 4px 0;">
+        <img class="sb-photo" src="https://raw.githubusercontent.com/danpinguc/Squirrel-Budy/refs/heads/main/Squirrel%20CloseUp.png" alt="squirrel" />
+      </div>
+
+      <!-- Conditions Section -->
+      <div class="sb-section-label">Conditions</div>
+      <div class="sb-divider-thin"></div>
+
+      <!-- Condition Heading -->
+      {% if condition == "active" %}
+        <div class="sb-condition-heading">● Likely Active</div>
+      {% elsif condition == "cautious" %}
+        <div class="sb-condition-heading">● Likely Cautious</div>
+      {% elsif condition == "sheltering" %}
+        <div class="sb-condition-heading">● Likely Sheltering</div>
+      {% else %}
+        <div class="sb-condition-heading">● --</div>
+      {% endif %}
+
+      <!-- Per-sensor behavioral breakdown -->
+      <div class="sb-breakdown">
+        <div class="sb-breakdown-row">
+          <span class="sb-breakdown-label">Temp</span>
+          <span class="sb-breakdown-desc">{{ temp_desc | default: "--" }}</span>
+        </div>
+        <div class="sb-breakdown-row">
+          <span class="sb-breakdown-label">Light</span>
+          <span class="sb-breakdown-desc">{{ light_desc | default: "--" }}</span>
+        </div>
+        <div class="sb-breakdown-row">
+          <span class="sb-breakdown-label">Sound</span>
+          <span class="sb-breakdown-desc">{{ sound_desc | default: "--" }}</span>
+        </div>
+        <div class="sb-breakdown-row">
+          <span class="sb-breakdown-label">Press</span>
+          <span class="sb-breakdown-desc">{{ pressure_desc | default: "--" }}</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Column Separator -->
+    <div class="sb-col-sep"></div>
+
+    <!-- Right Column: Raw Sensors -->
+    <div class="sb-right">
+      <div class="sb-section-label">Sensors</div>
+      <div class="sb-divider-thin"></div>
+
+      <!-- TEMP -->
+      <div class="sb-sensor">
+        <span class="sb-sensor-label">Temp</span>
+        <div class="sb-sensor-data">
+          <span>{{ temp_label | default: "--" }}</span>
+          <span>{{ temperature_f | default: "--" }}° F</span>
+        </div>
+      </div>
+      <div class="sb-divider-light"></div>
+
+      <!-- LIGHT -->
+      <div class="sb-sensor">
+        <span class="sb-sensor-label">Light</span>
+        <div class="sb-sensor-data">
+          <span>{{ light_label | default: "--" }}</span>
+          <span>{{ light_lux | default: "--" }} lx</span>
+        </div>
+      </div>
+      <div class="sb-divider-light"></div>
+
+      <!-- SOUND -->
+      <div class="sb-sensor">
+        <span class="sb-sensor-label">Sound</span>
+        <div class="sb-sensor-data">
+          <span>{{ sound_label | default: "--" }}</span>
+          <span>{{ sound_level | default: "--" }} db</span>
+        </div>
+      </div>
+      <div class="sb-divider-light"></div>
+
+      <!-- PRESSURE -->
+      <div class="sb-sensor">
+        <span class="sb-sensor-label">Pressure</span>
+        <div class="sb-sensor-data">
+          <span>{{ pressure_label | default: "--" }}</span>
+          <span>{{ pressure_hpa | default: "--" }} hPa</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="sb-divider-thick"></div>
+  <div class="sb-footer">Last updated {{ updated_at | default: "--:--" }}</div>
+
+</div>

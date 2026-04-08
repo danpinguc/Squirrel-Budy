@@ -10,9 +10,8 @@
  * Sketch > Include Library > Manage Libraries…
  *   1. "Adafruit BME280"       — by Adafruit (also installs Adafruit Unified Sensor)
  *   2. "BH1750"                — by Christopher Laws
- *   3. "arduinoFFT"            — by Enrique Condes
- *   4. "ArduinoJson"           — by Benoit Blanchon
- *   5. HTTPClient              — built-in with ESP32 board package (no install needed)
+ *   3. "ArduinoJson"           — by Benoit Blanchon
+ *   4. HTTPClient              — built-in with ESP32 board package (no install needed)
  *
  * ---- BOARD SETUP ----
  * Tools > Board > ESP32 Arduino > "ESP32 Dev Module"
@@ -29,7 +28,6 @@
 #include <Adafruit_BME280.h>
 #include <BH1750.h>
 #include <driver/i2s.h>
-#include <arduinoFFT.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -69,12 +67,12 @@ const int   daylightSec   = 0;          // Set to 3600 if you want auto-DST
 #define I2S_SD   33   // Serial Data (DOUT from mic)
 
 // =============================================================
-// I2S / FFT config
+// I2S config
 // =============================================================
 #define I2S_PORT       I2S_NUM_0
 #define SAMPLE_RATE    16000
 #define SAMPLE_BITS    32           // INMP441 sends 24-bit in 32-bit frames
-#define BLOCK_SIZE     512          // must be power of 2 for FFT
+#define BLOCK_SIZE     512
 #define DISCARD_MS     300          // ms of startup noise to throw away
 #define NUM_READS      10           // how many blocks to average for sound_level
 
@@ -178,22 +176,18 @@ bool setupI2S() {
 }
 
 // =============================================================
-// Read microphone — compute sound_level and wind_proxy
+// Read microphone — compute sound_level
 //
 // sound_level: average absolute amplitude, scaled to ~0-100
-// wind_proxy:  low-frequency energy (<200Hz), scaled 0-10
 // =============================================================
-void readMicrophone(int &soundLevel, int &windProxy) {
+void readMicrophone(int &soundLevel) {
   static int32_t raw[BLOCK_SIZE];     // static to avoid stack overflow
-  static double vReal[BLOCK_SIZE];
-  static double vImag[BLOCK_SIZE];
   size_t bytesRead;
 
   // Accumulate amplitude over several blocks for a stable reading
   int64_t totalAmplitude = 0;
   int totalSamples = 0;
 
-  // We'll use the last block for FFT analysis
   for (int r = 0; r < NUM_READS; r++) {
     esp_err_t err = i2s_read(I2S_PORT, raw, sizeof(raw), &bytesRead, 1000 / portTICK_PERIOD_MS);
     if (err != ESP_OK || bytesRead == 0) continue;
@@ -202,12 +196,6 @@ void readMicrophone(int &soundLevel, int &windProxy) {
     for (int i = 0; i < count; i++) {
       int32_t sample = raw[i] >> 8;  // 24-bit signed value
       totalAmplitude += abs(sample);
-
-      // Fill FFT arrays on the last block
-      if (r == NUM_READS - 1 && i < BLOCK_SIZE) {
-        vReal[i] = (double)sample;
-        vImag[i] = 0.0;
-      }
     }
     totalSamples += count;
   }
@@ -222,39 +210,6 @@ void readMicrophone(int &soundLevel, int &windProxy) {
   Serial.print(avgAmplitude);
   Serial.print(" → sound_level: ");
   Serial.println(soundLevel);
-
-  // --- wind_proxy: low-frequency energy via FFT ---
-  ArduinoFFT<double> fft(vReal, vImag, BLOCK_SIZE, SAMPLE_RATE);
-  fft.windowing(FFTWindow::Hamming, FFTDirection::Forward);
-  fft.compute(FFTDirection::Forward);
-  fft.complexToMagnitude();
-
-  // Each FFT bin = SAMPLE_RATE / BLOCK_SIZE Hz wide
-  // With 16000 Hz / 512 samples = 31.25 Hz per bin
-  // Bins below 200Hz: bins 1 through 6 (31–218 Hz). Skip bin 0 (DC).
-  double freqPerBin = (double)SAMPLE_RATE / BLOCK_SIZE;  // 31.25 Hz
-  int maxBin = (int)(200.0 / freqPerBin);                // ~6
-  double lowEnergy = 0;
-  double totalEnergy = 0;
-
-  for (int i = 1; i < BLOCK_SIZE / 2; i++) {
-    double mag = vReal[i];
-    totalEnergy += mag;
-    if (i <= maxBin) {
-      lowEnergy += mag;
-    }
-  }
-
-  // Scale low-frequency ratio to 0-10
-  // Wind shows up as dominant low-freq energy
-  double ratio = (totalEnergy > 0) ? (lowEnergy / totalEnergy) : 0;
-  windProxy = (int)(ratio * 20.0);  // ratio ~0.5 → 10. Tune this multiplier!
-  if (windProxy > 10) windProxy = 10;
-
-  Serial.print("  FFT low/total ratio: ");
-  Serial.print(ratio, 3);
-  Serial.print(" → wind_proxy: ");
-  Serial.println(windProxy);
 }
 
 // =============================================================
@@ -287,24 +242,18 @@ Label getPressureLabel(float hpa) {
   else                    return {"High",   "High pressure, clear conditions"};
 }
 
-Label getWindLabel(int proxy) {
-  if (proxy <= 2)       return {"Calm",   "Still air, calm conditions"};
-  else if (proxy <= 5)  return {"Breezy", "Some wind, may affect small animals"};
-  else                   return {"Windy",  "Strong wind, hard to move safely"};
-}
-
 // =============================================================
 // Compute overall condition from labels
 // =============================================================
-String getCondition(Label temp, Label light, Label sound, Label wind) {
+String getCondition(Label temp, Label light, Label sound) {
   // Stressed triggers → "sheltering"
   if (sound.label == "Loud" || temp.label == "Cold" || temp.label == "Hot" ||
-      wind.label == "Windy" || light.label == "Dark") {
+      light.label == "Dark") {
     return "sheltering";
   }
   // Borderline triggers → "cautious"
   if (sound.label == "Moderate" || temp.label == "Cool" ||
-      wind.label == "Breezy" || light.label == "Dim") {
+      light.label == "Dim") {
     return "cautious";
   }
   // Everything good → "active"
@@ -312,9 +261,9 @@ String getCondition(Label temp, Label light, Label sound, Label wind) {
 }
 
 // Build a one-line summary of why
-String getConditionDesc(String condition, Label temp, Label light, Label sound, Label wind) {
+String getConditionDesc(String condition, Label temp, Label light, Label sound) {
   if (condition == "active") {
-    return temp.label + ", " + wind.desc + ", good light for foraging";
+    return temp.label + ", calm and quiet, good light for foraging";
   } else if (condition == "cautious") {
     // Mention the borderline factors
     String reasons = "";
@@ -322,10 +271,6 @@ String getConditionDesc(String condition, Label temp, Label light, Label sound, 
     if (sound.label == "Moderate") {
       if (reasons.length() > 0) reasons += ", ";
       reasons += "some noise";
-    }
-    if (wind.label == "Breezy") {
-      if (reasons.length() > 0) reasons += ", ";
-      reasons += "breezy";
     }
     if (light.label == "Dim") {
       if (reasons.length() > 0) reasons += ", ";
@@ -340,10 +285,6 @@ String getConditionDesc(String condition, Label temp, Label light, Label sound, 
     if (sound.label == "Loud") {
       if (reasons.length() > 0) reasons += ", ";
       reasons += "loud noise";
-    }
-    if (wind.label == "Windy") {
-      if (reasons.length() > 0) reasons += ", ";
-      reasons += "strong wind";
     }
     if (light.label == "Dark") {
       if (reasons.length() > 0) reasons += ", ";
@@ -441,9 +382,8 @@ void setup() {
 
   // --- Read INMP441 ---
   int soundLevel = 0;
-  int windProxy  = 0;
   if (i2sOk) {
-    readMicrophone(soundLevel, windProxy);
+    readMicrophone(soundLevel);
   } else {
     Serial.println("  Mic: skipped (I2S failed)");
   }
@@ -458,10 +398,9 @@ void setup() {
   Label light_l    = getLightLabel(lux);
   Label sound_l    = getSoundLabel(soundLevel);
   Label pressure_l = getPressureLabel(pressure);
-  Label wind_l     = getWindLabel(windProxy);
 
-  String condition     = getCondition(temp_l, light_l, sound_l, wind_l);
-  String conditionDesc = getConditionDesc(condition, temp_l, light_l, sound_l, wind_l);
+  String condition     = getCondition(temp_l, light_l, sound_l);
+  String conditionDesc = getConditionDesc(condition, temp_l, light_l, sound_l);
 
   Serial.println();
   Serial.println("---- Labels ----");
@@ -469,7 +408,6 @@ void setup() {
   Serial.print("  Light:     "); Serial.print(light_l.label);    Serial.print(" — "); Serial.println(light_l.desc);
   Serial.print("  Sound:     "); Serial.print(sound_l.label);    Serial.print(" — "); Serial.println(sound_l.desc);
   Serial.print("  Pressure:  "); Serial.print(pressure_l.label); Serial.print(" — "); Serial.println(pressure_l.desc);
-  Serial.print("  Wind:      "); Serial.print(wind_l.label);     Serial.print(" — "); Serial.println(wind_l.desc);
   Serial.print("  Condition: "); Serial.print(condition);        Serial.print(" — "); Serial.println(conditionDesc);
 
   // --- Build JSON payload ---
@@ -481,18 +419,15 @@ void setup() {
   mv["pressure_hpa"]    = (int)round(pressure);
   mv["light_lux"]       = (int)round(lux);
   mv["sound_level"]     = soundLevel;
-  mv["wind_proxy"]      = windProxy;
   mv["condition"]       = condition;
   mv["temp_label"]      = temp_l.label;
   mv["light_label"]     = light_l.label;
   mv["sound_label"]     = sound_l.label;
   mv["pressure_label"]  = pressure_l.label;
-  mv["wind_label"]      = wind_l.label;
   mv["temp_desc"]       = temp_l.desc;
   mv["light_desc"]      = light_l.desc;
   mv["sound_desc"]      = sound_l.desc;
   mv["pressure_desc"]   = pressure_l.desc;
-  mv["wind_desc"]       = wind_l.desc;
   mv["condition_desc"]  = conditionDesc;
   mv["updated_at"]      = updatedAt;
 

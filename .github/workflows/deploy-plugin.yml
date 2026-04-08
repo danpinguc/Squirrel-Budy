@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'TRMNLPlugin/**'
+      - 'TRMNLPlugins/**'
 
 jobs:
   deploy:
@@ -22,7 +22,7 @@ jobs:
         run: gem install trmnl_preview
 
       - name: Push plugin to TRMNL
-        working-directory: ./TRMNLPlugin
+        working-directory: ./TRMNLPlugins
         env:
           TRMNL_API_KEY: ${{ secrets.TRMNL_API_KEY }}
         run: trmnlp push

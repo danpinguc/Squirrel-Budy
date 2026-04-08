@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'TRMNLPlugin/**'   # adjust to wherever your .liquid files live
+      - 'TRMNLPlugin/**'
 
 jobs:
   deploy:
@@ -22,7 +22,7 @@ jobs:
         run: gem install trmnl_preview
 
       - name: Push plugin to TRMNL
-        working-directory: ./TRMNLPlugin   # adjust to your plugin folder
+        working-directory: ./TRMNLPlugin
         env:
           TRMNL_API_KEY: ${{ secrets.TRMNL_API_KEY }}
         run: trmnlp push

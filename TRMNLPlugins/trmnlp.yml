@@ -1,0 +1,3 @@
+# Replace YOUR_PLUGIN_SETTING_ID with the ID from your TRMNL dashboard
+# (found in your plugin's Webhook URL)
+plugin_setting_id: YOUR_PLUGIN_SETTING_ID

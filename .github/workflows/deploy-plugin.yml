@@ -22,6 +22,10 @@ jobs:
       - name: Install trmnlp
         run: gem install trmnl_preview
 
+      - name: Debug - list plugin files
+        working-directory: ./TRMNLPlugins
+        run: find . -type f | sort
+        
       - name: Push plugin to TRMNL
         working-directory: ./TRMNLPlugins
         env:

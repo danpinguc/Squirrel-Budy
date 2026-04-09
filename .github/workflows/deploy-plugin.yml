@@ -17,14 +17,10 @@ jobs:
 
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.3'
+          ruby-version: '3.4'
 
-      - name: Install trmnlp from source
-        run: |
-          git clone https://github.com/usetrmnl/trmnlp.git /tmp/trmnlp
-          cd /tmp/trmnlp
-          gem build *.gemspec
-          gem install *.gem
+      - name: Install trmnlp
+        run: gem install trmnl_preview
 
       - name: Push plugin to TRMNL
         working-directory: ./TRMNLPlugins
